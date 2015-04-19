@@ -13,6 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
+# Copyright (c) 2015 (Audrey) Xuefeng Li
+# All rights reserved.
+
+# Licensed under the Apache License, Version 2.0 (the "License"); 
+# you may not use this file except in compliance with the License. 
+# You may obtain a copy of the License at
+
+# http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software 
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations 
+# under the License.2
+
 import flask
 from flask import Flask, request
 from flask_sockets import Sockets
@@ -25,6 +41,10 @@ import os
 app = Flask(__name__)
 sockets = Sockets(app)
 app.debug = True
+
+# XXX: socket client list
+clients = list()
+
 
 class World:
     def __init__(self):
@@ -69,18 +89,47 @@ myWorld.add_set_listener( set_listener )
 @app.route('/')
 def hello():
     '''Return something coherent here.. perhaps redirect to /static/index.html '''
-    return None
+    return flask.redirect("/static/index.html")
 
 def read_ws(ws,client):
     '''A greenlet function that reads from the websocket and updates the world'''
     # XXX: TODO IMPLEMENT ME
-    return None
+    try:
+        while True:
+	    msg = ws.receive()
+     	    if (msg is not None):
+                if (msg=="newclient"):
+                    if myWorld.world():
+                        ws.send(json.dumps(myWorld.world()))
+                else:
+                    delta = json.loads(msg)
+                    for entity in delta:
+                        data = delta[entity]
+	                myWorld.set(entity, data)
+	            for ws_e in clients:
+		        ws_e.send(json.dumps(delta))
+                        #ws_e.send(json.dumps("test"))
+	    else:
+	        break
+    except:
+        '''Done'''
 
 @sockets.route('/subscribe')
 def subscribe_socket(ws):
     '''Fufill the websocket URL of /subscribe, every update notify the
        websocket and read updates from the websocket '''
     # XXX: TODO IMPLEMENT ME
+    clients.append(ws)
+    g = gevent.spawn( read_ws, ws, clients )    
+    try:
+        while True:
+            # block here
+            time.sleep(1)
+    except Exception as e:# WebSocketError as e:
+        print "WS Error %s" % e
+    finally:
+        clients.remove(ws)
+        gevent.kill(g)
     return None
 
 
